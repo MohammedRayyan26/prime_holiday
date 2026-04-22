@@ -21,7 +21,7 @@ define('RAZORPAY_KEY_SECRET', 'JpWMz5oH4jUjf5h4xtUFnV4x');
 
 define('MAIL_HOST', 'smtp.gmail.com');
 define('MAIL_PORT', 465);
-define('MAIL_USERNAME', 'maesterintern@gmail.com');
-define('MAIL_PASSWORD', 'uaii iurs fann kcmz');
-define('MAIL_FROM_ADDRESS', 'maesterintern@gmail.com');
+define('MAIL_USERNAME', 'cloudwithrayyan@gmail.com');
+define('MAIL_PASSWORD', 'linf uikn gzoq hbwt');
+define('MAIL_FROM_ADDRESS', 'cloudwithrayyan@gmail.com');
 define('MAIL_FROM_NAME', 'Prime Holiday');
