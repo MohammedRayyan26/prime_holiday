@@ -2299,6 +2299,152 @@ main {
     background: #dc2626;
 }
 
+.package-card-link {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.package-card-link:hover {
+    transform: translateY(-4px);
+}
+
+.admin-destination-actions-cell {
+    white-space: nowrap;
+    min-width: 360px;
+}
+
+.admin-destination-actions-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+}
+
+.admin-destination-action-form {
+    display: inline-flex;
+    margin: 0;
+}
+
+.admin-destination-action-btn {
+    min-height: 32px;
+    padding: 6px 10px;
+    font-size: 11px;
+    border-radius: 10px;
+    white-space: nowrap;
+    min-width: auto;
+}
+
+.admin-destination-actions-inline .btn-danger.admin-destination-action-btn {
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+@media (max-width: 1100px) {
+    .admin-destination-actions-cell {
+        min-width: 320px;
+    }
+
+    .admin-destination-actions-inline {
+        flex-wrap: wrap;
+    }
+}
+
+.admin-destination-actions-cell {
+    white-space: nowrap;
+    min-width: 360px;
+}
+
+.admin-destination-actions-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+}
+
+.admin-destination-action-form {
+    display: inline-flex;
+    margin: 0;
+}
+
+.admin-destination-action-btn {
+    min-height: 32px;
+    padding: 6px 10px;
+    font-size: 11px;
+    border-radius: 10px;
+    white-space: nowrap;
+    min-width: auto;
+}
+
+.admin-destination-actions-inline .btn-danger.admin-destination-action-btn {
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+@media (max-width: 1100px) {
+    .admin-destination-actions-cell {
+        min-width: 320px;
+    }
+
+    .admin-destination-actions-inline {
+        flex-wrap: wrap;
+    }
+}
+
+.admin-destination-actions-cell {
+    white-space: nowrap;
+    min-width: 390px;
+}
+
+.admin-destination-actions-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+}
+
+.admin-destination-action-form {
+    display: inline-flex;
+    margin: 0;
+}
+
+.admin-destination-action-btn {
+    min-height: 32px;
+    padding: 6px 10px;
+    font-size: 11px;
+    border-radius: 10px;
+    white-space: nowrap;
+    justify-content: center;
+}
+
+.admin-destination-action-btn.action-edit {
+    width: 46px;
+}
+
+.admin-destination-action-btn.action-trend {
+    width: 78px;
+}
+
+.admin-destination-action-btn.action-active {
+    width: 96px;
+}
+
+.admin-destination-action-btn.action-delete {
+    width: 62px;
+}
+
+@media (max-width: 1100px) {
+    .admin-destination-actions-cell {
+        min-width: 320px;
+    }
+
+    .admin-destination-actions-inline {
+        flex-wrap: wrap;
+    }
+}
+
 /* =========================
    END OF STYLESHEET
    ========================= */
