@@ -40,20 +40,39 @@ function createMailer(?string &$errorMessage = null)
     $mail->isSMTP();
     $mail->Host = MAIL_HOST;
     $mail->SMTPAuth = true;
-    $mail->Username = trim((string)MAIL_USERNAME);
-    $mail->Password = trim((string)MAIL_PASSWORD);
-    $mail->SMTPSecure = 'tls';
-    $mail->Port = 587;
+    $mail->Username = trim((string) MAIL_USERNAME);
+    $mail->Password = trim((string) MAIL_PASSWORD);
+
+    $port = defined('MAIL_PORT') ? (int) MAIL_PORT : 587;
+    $mail->Port = $port;
+
+    if ($port === 465) {
+        $mail->SMTPSecure = 'ssl';
+    } else {
+        $mail->SMTPSecure = 'tls';
+    }
+
+    $mail->CharSet = 'UTF-8';
     $mail->Timeout = 30;
 
-    $mail->setFrom(trim((string)MAIL_FROM_ADDRESS), (string)MAIL_FROM_NAME);
+    // Uncomment only for debugging
+    // $mail->SMTPDebug = 2;
+    // $mail->Debugoutput = 'html';
+
+    $mail->setFrom(trim((string) MAIL_FROM_ADDRESS), (string) MAIL_FROM_NAME);
     $mail->isHTML(true);
 
     return $mail;
 }
 
-function sendOtpLoginEmail(string $toEmail, string $toName, string $otpCode, ?string &$errorMessage = null): bool
-{
+function sendGeneralEmail(
+    string $toEmail,
+    string $toName,
+    string $subject,
+    string $htmlBody,
+    ?string &$errorMessage = null,
+    string $altBody = ''
+): bool {
     $errorMessage = null;
 
     try {
@@ -62,38 +81,10 @@ function sendOtpLoginEmail(string $toEmail, string $toName, string $otpCode, ?st
             return false;
         }
 
-        $safeName = htmlspecialchars($toName, ENT_QUOTES, 'UTF-8');
-        $safeOtp = htmlspecialchars($otpCode, ENT_QUOTES, 'UTF-8');
-
         $mail->addAddress(trim($toEmail), $toName);
-        $mail->Subject = 'Your Prime Holiday Login OTP';
-
-        $mail->Body = '
-        <div style="font-family:Arial,sans-serif;background:#f6f8fc;padding:24px;">
-            <div style="max-width:620px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e5eaf2;">
-                <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;padding:24px;">
-                    <h2 style="margin:0;">Prime Holiday</h2>
-                    <p style="margin:8px 0 0;">Login verification code</p>
-                </div>
-                <div style="padding:24px;color:#172033;">
-                    <p>Hi <strong>' . $safeName . '</strong>,</p>
-                    <p>Use the OTP below to login to your Prime Holiday account:</p>
-
-                    <div style="margin:22px 0;padding:18px;text-align:center;background:#f8fbff;border:1px solid #dbe4f0;border-radius:14px;">
-                        <div style="font-size:32px;font-weight:800;letter-spacing:8px;color:#2563eb;">' . $safeOtp . '</div>
-                    </div>
-
-                    <p>This OTP is valid for <strong>10 minutes</strong>.</p>
-                    <p>If you did not request this login, please ignore this email.</p>
-                </div>
-            </div>
-        </div>';
-
-        $mail->AltBody =
-            "Prime Holiday Login OTP\n" .
-            "Hello " . $toName . ",\n" .
-            "Your OTP is: " . $otpCode . "\n" .
-            "This OTP is valid for 10 minutes.\n";
+        $mail->Subject = $subject;
+        $mail->Body = $htmlBody;
+        $mail->AltBody = $altBody !== '' ? $altBody : strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $htmlBody));
 
         $mail->send();
         return true;
@@ -101,86 +92,97 @@ function sendOtpLoginEmail(string $toEmail, string $toName, string $otpCode, ?st
         $errorMessage = $e->getMessage();
         return false;
     }
+}
+
+function sendCustomEmail(
+    string $toEmail,
+    string $toName,
+    string $subject,
+    string $htmlBody,
+    ?string &$errorMessage = null,
+    string $altBody = ''
+): bool {
+    return sendGeneralEmail($toEmail, $toName, $subject, $htmlBody, $errorMessage, $altBody);
+}
+
+function sendOtpLoginEmail(string $toEmail, string $toName, string $otpCode, ?string &$errorMessage = null): bool
+{
+    $errorMessage = null;
+
+    $safeName = htmlspecialchars($toName, ENT_QUOTES, 'UTF-8');
+    $safeOtp = htmlspecialchars($otpCode, ENT_QUOTES, 'UTF-8');
+
+    $subject = 'Your Prime Holiday Login OTP';
+
+    $htmlBody = '
+    <div style="font-family:Arial,sans-serif;background:#f6f8fc;padding:24px;">
+        <div style="max-width:620px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e5eaf2;">
+            <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;padding:24px;">
+                <h2 style="margin:0;">Prime Holiday</h2>
+                <p style="margin:8px 0 0;">Login verification code</p>
+            </div>
+            <div style="padding:24px;color:#172033;">
+                <p>Hi <strong>' . $safeName . '</strong>,</p>
+                <p>Use the OTP below to login to your Prime Holiday account:</p>
+
+                <div style="margin:22px 0;padding:18px;text-align:center;background:#f8fbff;border:1px solid #dbe4f0;border-radius:14px;">
+                    <div style="font-size:32px;font-weight:800;letter-spacing:8px;color:#2563eb;">' . $safeOtp . '</div>
+                </div>
+
+                <p>This OTP is valid for <strong>10 minutes</strong>.</p>
+                <p>If you did not request this login, please ignore this email.</p>
+            </div>
+        </div>
+    </div>';
+
+    $altBody =
+        "Prime Holiday Login OTP\n" .
+        "Hello " . $toName . ",\n" .
+        "Your OTP is: " . $otpCode . "\n" .
+        "This OTP is valid for 10 minutes.\n";
+
+    return sendGeneralEmail($toEmail, $toName, $subject, $htmlBody, $errorMessage, $altBody);
 }
 
 function sendSignupOtpEmail(string $toEmail, string $toName, string $otpCode, ?string &$errorMessage = null): bool
 {
     $errorMessage = null;
 
-    try {
-        $exceptionFile = __DIR__ . '/../phpmailer/src/Exception.php';
-        $phpMailerFile = __DIR__ . '/../phpmailer/src/PHPMailer.php';
-        $smtpFile = __DIR__ . '/../phpmailer/src/SMTP.php';
+    $safeName = htmlspecialchars($toName, ENT_QUOTES, 'UTF-8');
+    $safeOtp = htmlspecialchars($otpCode, ENT_QUOTES, 'UTF-8');
 
-        if (!file_exists($exceptionFile) || !file_exists($phpMailerFile) || !file_exists($smtpFile)) {
-            $errorMessage = 'PHPMailer files not found in /phpmailer/src/';
-            return false;
-        }
+    $subject = 'Prime Holiday Signup OTP';
 
-        require_once $exceptionFile;
-        require_once $phpMailerFile;
-        require_once $smtpFile;
-
-        $mailClass = 'PHPMailer\\PHPMailer\\PHPMailer';
-
-        if (!class_exists($mailClass)) {
-            $errorMessage = 'PHPMailer class could not be loaded.';
-            return false;
-        }
-
-        $safeName = htmlspecialchars($toName, ENT_QUOTES, 'UTF-8');
-        $safeOtp = htmlspecialchars($otpCode, ENT_QUOTES, 'UTF-8');
-
-        $mail = new $mailClass(true);
-        $mail->isSMTP();
-        $mail->Host = MAIL_HOST;
-        $mail->SMTPAuth = true;
-        $mail->Username = trim((string)MAIL_USERNAME);
-        $mail->Password = trim((string)MAIL_PASSWORD);
-        $mail->SMTPSecure = 'tls';
-        $mail->Port = 587;
-        $mail->Timeout = 30;
-
-        $mail->setFrom(trim((string)MAIL_FROM_ADDRESS), (string)MAIL_FROM_NAME);
-        $mail->addAddress(trim($toEmail), $toName);
-
-        $mail->isHTML(true);
-        $mail->Subject = 'Prime Holiday Signup OTP';
-
-        $mail->Body = '
-        <div style="font-family:Arial,sans-serif;background:#f6f8fc;padding:24px;">
-            <div style="max-width:620px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e5eaf2;">
-                <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;padding:24px;">
-                    <h2 style="margin:0;">Prime Holiday</h2>
-                    <p style="margin:8px 0 0;">Email verification OTP</p>
-                </div>
-                <div style="padding:24px;color:#172033;">
-                    <p>Hi <strong>' . $safeName . '</strong>,</p>
-                    <p>Use the OTP below to verify your email and complete signup:</p>
-
-                    <div style="margin:22px 0;padding:18px;text-align:center;background:#f8fbff;border:1px solid #dbe4f0;border-radius:14px;">
-                        <div style="font-size:32px;font-weight:800;letter-spacing:8px;color:#2563eb;">' . $safeOtp . '</div>
-                    </div>
-
-                    <p>This OTP is valid for <strong>10 minutes</strong>.</p>
-                    <p>If you did not create this account, please ignore this email.</p>
-                </div>
+    $htmlBody = '
+    <div style="font-family:Arial,sans-serif;background:#f6f8fc;padding:24px;">
+        <div style="max-width:620px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e5eaf2;">
+            <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;padding:24px;">
+                <h2 style="margin:0;">Prime Holiday</h2>
+                <p style="margin:8px 0 0;">Email verification OTP</p>
             </div>
-        </div>';
+            <div style="padding:24px;color:#172033;">
+                <p>Hi <strong>' . $safeName . '</strong>,</p>
+                <p>Use the OTP below to verify your email and complete signup:</p>
 
-        $mail->AltBody =
-            "Prime Holiday Signup OTP\n" .
-            "Hello " . $toName . ",\n" .
-            "Your signup OTP is: " . $otpCode . "\n" .
-            "This OTP is valid for 10 minutes.\n";
+                <div style="margin:22px 0;padding:18px;text-align:center;background:#f8fbff;border:1px solid #dbe4f0;border-radius:14px;">
+                    <div style="font-size:32px;font-weight:800;letter-spacing:8px;color:#2563eb;">' . $safeOtp . '</div>
+                </div>
 
-        $mail->send();
-        return true;
-    } catch (\Throwable $e) {
-        $errorMessage = $e->getMessage();
-        return false;
-    }
+                <p>This OTP is valid for <strong>10 minutes</strong>.</p>
+                <p>If you did not create this account, please ignore this email.</p>
+            </div>
+        </div>
+    </div>';
+
+    $altBody =
+        "Prime Holiday Signup OTP\n" .
+        "Hello " . $toName . ",\n" .
+        "Your signup OTP is: " . $otpCode . "\n" .
+        "This OTP is valid for 10 minutes.\n";
+
+    return sendGeneralEmail($toEmail, $toName, $subject, $htmlBody, $errorMessage, $altBody);
 }
+
 function sendBookingConfirmationEmail(array $data, ?string &$errorMessage = null): bool
 {
     $errorMessage = null;
@@ -204,11 +206,6 @@ function sendBookingConfirmationEmail(array $data, ?string &$errorMessage = null
                 $errorMessage = 'Missing mail data field: ' . $key;
                 return false;
             }
-        }
-
-        $mail = createMailer($errorMessage);
-        if (!$mail) {
-            return false;
         }
 
         $customerName = htmlspecialchars((string)$data['customer_name'], ENT_QUOTES, 'UTF-8');
@@ -252,7 +249,7 @@ function sendBookingConfirmationEmail(array $data, ?string &$errorMessage = null
                             <td style="padding:10px; border:1px solid #e5eaf2;">' . $passengers . '</td>
                         </tr>
                         <tr>
-                            <td style="padding:10px; border:1px solid #e5eaf2; background:#f8fbff;"><strong>Total Paid</strong></td>
+                            <td style="padding:10px; border:1px solid #e5eaf2; background:#f8fbff;"><strong>Total Amount</strong></td>
                             <td style="padding:10px; border:1px solid #e5eaf2;">' . $amount . '</td>
                         </tr>
                         <tr>
@@ -263,32 +260,24 @@ function sendBookingConfirmationEmail(array $data, ?string &$errorMessage = null
 
                     <p style="margin-top:20px;">
                         You can view your booking anytime from your profile:
-                        <br>
-                        <a href="' . $siteUrl . '/profile.php" style="color:#2563eb; font-weight:bold;">Open My Profile</a>
+                        <a href="' . htmlspecialchars($siteUrl . '/profile.php?tab=bookings', ENT_QUOTES, 'UTF-8') . '">My Bookings</a>
                     </p>
 
-                    <p style="margin-top:20px;">Thank you for choosing Prime Holiday.</p>
+                    <p>Thank you for choosing Prime Holiday.</p>
                 </div>
             </div>
         </div>';
 
-        $textBody =
+        $altBody =
             "Prime Holiday Booking Confirmation\n" .
             "Booking Reference: " . $data['booking_reference'] . "\n" .
             "Package: " . $data['package_name'] . "\n" .
             "Travel Date: " . $data['travel_date'] . "\n" .
             "Passengers: " . $data['number_of_passengers'] . "\n" .
-            "Total Paid: " . $amount . "\n" .
-            "Payment ID: " . $data['razorpay_payment_id'] . "\n" .
-            "Profile: " . $siteUrl . "/profile.php\n";
+            "Amount: ₹" . number_format((float)$data['total_amount'], 2) . "\n" .
+            "Payment ID: " . $data['razorpay_payment_id'] . "\n";
 
-        $mail->addAddress($customerEmail, $customerName);
-        $mail->Subject = $subject;
-        $mail->Body = $htmlBody;
-        $mail->AltBody = $textBody;
-
-        $mail->send();
-        return true;
+        return sendGeneralEmail($customerEmail, (string)$data['customer_name'], $subject, $htmlBody, $errorMessage, $altBody);
     } catch (\Throwable $e) {
         $errorMessage = $e->getMessage();
         return false;

@@ -5,7 +5,7 @@ require_once __DIR__ . '/functions.php';
 function requireLogin(): void
 {
     if (!isLoggedIn()) {
-        redirectTo(BASE_URL . '/login.php');
+        redirectToLoginWithReturn();
     }
 }
 

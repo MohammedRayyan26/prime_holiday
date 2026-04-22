@@ -129,6 +129,4 @@ if (!empty($success)) {
     }, 3000);
 })();
 </script>
-
-
 <main>

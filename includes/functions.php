@@ -21,6 +21,49 @@ function redirectTo(string $path): void
     exit;
 }
 
+function normalizeRedirectTarget(?string $target, string $fallback = BASE_URL . '/profile.php'): string
+{
+    $target = trim((string)$target);
+
+    if ($target === '') {
+        return $fallback;
+    }
+
+    $target = str_replace(["\r", "\n"], '', $target);
+
+    // block external redirects
+    if (preg_match('#^https?://#i', $target)) {
+        return $fallback;
+    }
+
+    if ($target[0] !== '/') {
+        $target = '/' . ltrim($target, '/');
+    }
+
+    // allow only internal paths inside this project
+    if (
+        $target !== BASE_URL &&
+        strpos($target, BASE_URL . '/') !== 0 &&
+        strpos($target, BASE_URL . '?') !== 0
+    ) {
+        return $fallback;
+    }
+
+    return $target;
+}
+
+function currentRequestPath(): string
+{
+    $uri = $_SERVER['REQUEST_URI'] ?? (BASE_URL . '/');
+    return normalizeRedirectTarget($uri, BASE_URL . '/');
+}
+
+function redirectToLoginWithReturn(): void
+{
+    $returnTo = currentRequestPath();
+    redirectTo(BASE_URL . '/login.php?redirect=' . rawurlencode($returnTo));
+}
+
 function currentUserName(): string
 {
     return $_SESSION['user_name'] ?? 'Guest';
