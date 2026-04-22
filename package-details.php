@@ -86,6 +86,28 @@ if ($packageId > 0) {
     }
 }
 
+$galleryImages = [];
+
+if ($package) {
+    $galleryImages[] = [
+        'image_path' => $package['featured_image'],
+        'alt_text'   => $package['package_name'],
+    ];
+
+    foreach ($images as $image) {
+        if (!empty($image['image_path'])) {
+            $galleryImages[] = [
+                'image_path' => $image['image_path'],
+                'alt_text'   => $image['alt_text'] ?: $package['package_name'],
+            ];
+        }
+    }
+
+    $galleryImages = array_values(array_filter($galleryImages, function ($img) {
+        return !empty($img['image_path']);
+    }));
+}
+
 require_once __DIR__ . '/includes/header.php';
 ?>
 
@@ -108,17 +130,40 @@ require_once __DIR__ . '/includes/header.php';
 
             <div class="info-grid" style="margin-bottom:24px;">
                 <div class="info-card" style="grid-column: span 2;">
-                    <div class="card-image" style="height:360px;border-radius:18px;overflow:hidden;margin-bottom:16px;">
-                        <img src="<?= e(getImageUrl($package['featured_image'])) ?>" alt="<?= e($package['package_name']) ?>">
-                    </div>
+                    <?php if (!empty($galleryImages)): ?>
+                        <div class="package-gallery-slider" id="packageGallerySlider">
+                            <div class="package-gallery-main-card">
+                                <?php foreach ($galleryImages as $index => $image): ?>
+                                    <div class="package-gallery-slide<?= $index === 0 ? ' active' : '' ?>">
+                                        <img
+                                            src="<?= e(getImageUrl($image['image_path'])) ?>"
+                                            alt="<?= e($image['alt_text']) ?>"
+                                        >
+                                    </div>
+                                <?php endforeach; ?>
 
-                    <?php if (!empty($images)): ?>
-                        <div class="card-grid" style="grid-template-columns:repeat(3,1fr);margin-top:16px;">
-                            <?php foreach ($images as $image): ?>
-                                <div class="card-image" style="height:160px;border-radius:18px;overflow:hidden;">
-                                    <img src="<?= e(getImageUrl($image['image_path'])) ?>" alt="<?= e($image['alt_text'] ?: $package['package_name']) ?>">
+                                <?php if (count($galleryImages) > 1): ?>
+                                    <button type="button" class="package-gallery-nav prev" id="galleryPrev" aria-label="Previous image">
+                                        &#10094;
+                                    </button>
+                                    <button type="button" class="package-gallery-nav next" id="galleryNext" aria-label="Next image">
+                                        &#10095;
+                                    </button>
+                                <?php endif; ?>
+                            </div>
+
+                            <?php if (count($galleryImages) > 1): ?>
+                                <div class="package-gallery-dots" id="galleryDots">
+                                    <?php foreach ($galleryImages as $index => $image): ?>
+                                        <button
+                                            type="button"
+                                            class="package-gallery-dot<?= $index === 0 ? ' active' : '' ?>"
+                                            data-index="<?= $index ?>"
+                                            aria-label="Go to image <?= $index + 1 ?>"
+                                        ></button>
+                                    <?php endforeach; ?>
                                 </div>
-                            <?php endforeach; ?>
+                            <?php endif; ?>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -265,5 +310,157 @@ require_once __DIR__ . '/includes/header.php';
         <?php endif; ?>
     </div>
 </section>
+
+<style>
+.package-gallery-slider {
+    width: 100%;
+}
+
+.package-gallery-main-card {
+    position: relative;
+    width: 100%;
+    height: 420px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #f8fafc;
+    border: 1px solid #e5eaf2;
+}
+
+.package-gallery-slide {
+    display: none;
+    width: 100%;
+    height: 100%;
+}
+
+.package-gallery-slide.active {
+    display: block;
+}
+
+.package-gallery-slide img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.package-gallery-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 46px;
+    height: 46px;
+    border: none;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.75);
+    color: #fff;
+    font-size: 22px;
+    cursor: pointer;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.package-gallery-nav.prev {
+    left: 14px;
+}
+
+.package-gallery-nav.next {
+    right: 14px;
+}
+
+.package-gallery-nav:hover {
+    background: rgba(15, 23, 42, 0.9);
+}
+
+.package-gallery-dots {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+}
+
+.package-gallery-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    border: none;
+    background: #cbd5e1;
+    cursor: pointer;
+}
+
+.package-gallery-dot.active {
+    background: #0f172a;
+}
+
+@media (max-width: 768px) {
+    .package-gallery-main-card {
+        height: 260px;
+    }
+
+    .package-gallery-nav {
+        width: 40px;
+        height: 40px;
+        font-size: 20px;
+    }
+}
+</style>
+
+<script>
+(function () {
+    const slider = document.getElementById('packageGallerySlider');
+    if (!slider) return;
+
+    const slides = slider.querySelectorAll('.package-gallery-slide');
+    const dots = slider.querySelectorAll('.package-gallery-dot');
+    const prevBtn = document.getElementById('galleryPrev');
+    const nextBtn = document.getElementById('galleryNext');
+
+    if (!slides.length) return;
+
+    let currentIndex = 0;
+
+    function showSlide(index) {
+        if (index < 0) {
+            index = slides.length - 1;
+        }
+        if (index >= slides.length) {
+            index = 0;
+        }
+
+        slides.forEach((slide, i) => {
+            slide.classList.toggle('active', i === index);
+        });
+
+        dots.forEach((dot, i) => {
+            dot.classList.toggle('active', i === index);
+        });
+
+        currentIndex = index;
+    }
+
+    if (prevBtn) {
+        prevBtn.addEventListener('click', function () {
+            showSlide(currentIndex - 1);
+        });
+    }
+
+    if (nextBtn) {
+        nextBtn.addEventListener('click', function () {
+            showSlide(currentIndex + 1);
+        });
+    }
+
+    dots.forEach((dot) => {
+        dot.addEventListener('click', function () {
+            const index = parseInt(this.getAttribute('data-index') || '0', 10);
+            showSlide(index);
+        });
+    });
+
+    showSlide(0);
+})();
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

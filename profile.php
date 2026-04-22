@@ -2,6 +2,7 @@
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/functions.php';
 require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/mailer.php';
 
 requireLogin();
 
@@ -17,6 +18,56 @@ $activeTab = trim((string)($_GET['tab'] ?? $_POST['active_tab'] ?? 'profile'));
 $allowedTabs = ['profile', 'password', 'bookings'];
 if (!in_array($activeTab, $allowedTabs, true)) {
     $activeTab = 'profile';
+}
+
+$passwordOtpStep = false;
+
+function profileTabUrl(string $tab): string {
+    return BASE_URL . '/profile.php?tab=' . urlencode($tab);
+}
+
+function canCancelBooking(array $booking): bool {
+    $status = strtolower(trim((string)($booking['booking_status'] ?? '')));
+    return in_array($status, ['pending', 'confirmed'], true);
+}
+
+function sendBookingMail(string $toEmail, string $toName, string $subject, string $html, ?string &$error = null): bool
+{
+    $error = null;
+
+    if ($toEmail === '') {
+        $error = 'Recipient email is empty.';
+        return false;
+    }
+
+    try {
+        if (function_exists('sendCustomEmail')) {
+            return (bool) sendCustomEmail($toEmail, $toName, $subject, $html, $error);
+        }
+
+        if (function_exists('sendGeneralEmail')) {
+            return (bool) sendGeneralEmail($toEmail, $toName, $subject, $html, $error);
+        }
+
+        if (function_exists('sendOtpLoginEmail')) {
+            // fallback not suitable for generic mail body, so skip
+        }
+    } catch (Throwable $e) {
+        $error = $e->getMessage();
+        return false;
+    }
+
+    $headers = [];
+    $headers[] = 'MIME-Version: 1.0';
+    $headers[] = 'Content-type: text/html; charset=UTF-8';
+    $headers[] = 'From: Prime Holiday <no-reply@primeholiday.com>';
+
+    $sent = @mail($toEmail, $subject, $html, implode("\r\n", $headers));
+    if (!$sent) {
+        $error = 'Mail send failed.';
+    }
+
+    return $sent;
 }
 
 try {
@@ -39,6 +90,16 @@ try {
     $profile = $profileStmt->fetch();
 } catch (Throwable $e) {
     $error = 'Unable to load profile data.';
+}
+
+/*
+|--------------------------------------------------------------------------
+| Reset OTP mode on normal refresh / fresh GET
+|--------------------------------------------------------------------------
+*/
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    unset($_SESSION['profile_password_reset_email']);
+    $passwordOtpStep = false;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profile'])) {
@@ -118,6 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profile'])) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
     $activeTab = 'password';
+    $passwordOtpStep = false;
 
     $currentPassword = (string)($_POST['current_password'] ?? '');
     $newPassword = (string)($_POST['new_password'] ?? '');
@@ -154,8 +216,285 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_password'])) {
             ");
             $userStmt->execute([$userId]);
             $user = $userStmt->fetch();
+
+            unset($_SESSION['profile_password_reset_email']);
         } catch (Throwable $e) {
             $error = 'Unable to change password right now.';
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_password_reset_otp'])) {
+    $activeTab = 'password';
+    $passwordOtpStep = true;
+
+    if (empty($user['email'])) {
+        $error = 'No email address found for your account.';
+    } else {
+        $otpCode = (string) random_int(100000, 999999);
+
+        try {
+            $pdo->beginTransaction();
+
+            $clearStmt = $pdo->prepare("
+                UPDATE email_otps
+                SET is_used = 1
+                WHERE email = ? AND purpose = 'forgot_password' AND is_used = 0
+            ");
+            $clearStmt->execute([$user['email']]);
+
+            $insertStmt = $pdo->prepare("
+                INSERT INTO email_otps (
+                    user_id, email, otp_code, purpose, expires_at, verified_at, is_used, created_at
+                ) VALUES (
+                    ?, ?, ?, 'forgot_password', DATE_ADD(NOW(), INTERVAL 10 MINUTE), NULL, 0, NOW()
+                )
+            ");
+            $insertStmt->execute([
+                $userId,
+                $user['email'],
+                $otpCode
+            ]);
+
+            $mailError = null;
+            $mailSent = sendOtpLoginEmail($user['email'], $user['full_name'] ?? 'User', $otpCode, $mailError);
+
+            if (!$mailSent) {
+                throw new Exception($mailError ?: 'Unable to send reset OTP.');
+            }
+
+            $pdo->commit();
+
+            $success = 'Password reset OTP sent to your email.';
+            $_SESSION['profile_password_reset_email'] = $user['email'];
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $error = 'Could not send reset OTP right now. ' . $e->getMessage();
+            $passwordOtpStep = false;
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_password_with_otp'])) {
+    $activeTab = 'password';
+    $passwordOtpStep = true;
+
+    $otpCode = trim((string)($_POST['otp_code'] ?? ''));
+    $newPassword = (string)($_POST['otp_new_password'] ?? '');
+    $confirmPassword = (string)($_POST['otp_confirm_new_password'] ?? '');
+
+    if ($otpCode === '' || $newPassword === '' || $confirmPassword === '') {
+        $error = 'Please fill all OTP reset password fields.';
+    } elseif (strlen($newPassword) < 8) {
+        $error = 'New password must be at least 8 characters.';
+    } elseif ($newPassword !== $confirmPassword) {
+        $error = 'New password and confirm password do not match.';
+    } else {
+        $stmt = $pdo->prepare("
+            SELECT eo.id AS otp_id, eo.user_id
+            FROM email_otps eo
+            WHERE eo.user_id = ?
+              AND eo.email = ?
+              AND eo.otp_code = ?
+              AND eo.purpose = 'forgot_password'
+              AND eo.is_used = 0
+              AND eo.verified_at IS NULL
+              AND eo.expires_at >= NOW()
+            ORDER BY eo.id DESC
+            LIMIT 1
+        ");
+        $stmt->execute([
+            $userId,
+            $user['email'],
+            $otpCode
+        ]);
+        $otpRow = $stmt->fetch();
+
+        if (!$otpRow) {
+            $error = 'Invalid or expired reset OTP.';
+        } else {
+            try {
+                $pdo->beginTransaction();
+
+                $updateOtp = $pdo->prepare("
+                    UPDATE email_otps
+                    SET is_used = 1, verified_at = NOW()
+                    WHERE id = ?
+                ");
+                $updateOtp->execute([(int)$otpRow['otp_id']]);
+
+                $newHash = password_hash($newPassword, PASSWORD_BCRYPT);
+
+                $updateUser = $pdo->prepare("
+                    UPDATE users
+                    SET password_hash = ?, updated_at = NOW()
+                    WHERE id = ?
+                ");
+                $updateUser->execute([$newHash, $userId]);
+
+                $pdo->commit();
+
+                unset($_SESSION['profile_password_reset_email']);
+
+                $success = 'Password reset successfully.';
+                $passwordOtpStep = false;
+
+                $userStmt = $pdo->prepare("
+                    SELECT id, full_name, email, phone, gender, role, password_hash, created_at
+                    FROM users
+                    WHERE id = ?
+                    LIMIT 1
+                ");
+                $userStmt->execute([$userId]);
+                $user = $userStmt->fetch();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $error = 'Unable to reset password right now.';
+            }
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_password_otp'])) {
+    $activeTab = 'password';
+    $passwordOtpStep = false;
+    unset($_SESSION['profile_password_reset_email']);
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_booking_user'])) {
+    $activeTab = 'bookings';
+
+    $bookingId = (int)($_POST['booking_id'] ?? 0);
+
+    if ($bookingId <= 0) {
+        $error = 'Invalid booking selected.';
+    } else {
+        try {
+            $bookingStmt = $pdo->prepare("
+                SELECT
+                    b.id,
+                    b.user_id,
+                    b.booking_reference,
+                    b.customer_name,
+                    b.customer_email,
+                    b.customer_phone,
+                    b.travel_date,
+                    b.total_amount,
+                    b.booking_status,
+                    b.payment_status,
+                    b.created_at,
+                    p.package_name
+                FROM bookings b
+                INNER JOIN packages p ON p.id = b.package_id
+                WHERE b.id = ? AND b.user_id = ?
+                LIMIT 1
+            ");
+            $bookingStmt->execute([$bookingId, $userId]);
+            $bookingRow = $bookingStmt->fetch();
+
+            if (!$bookingRow) {
+                $error = 'Booking not found.';
+            } elseif (!canCancelBooking($bookingRow)) {
+                $error = 'This booking cannot be cancelled now.';
+            } else {
+                $pdo->beginTransaction();
+
+                $currentPaymentStatus = strtolower(trim((string)($bookingRow['payment_status'] ?? '')));
+                $newPaymentStatus = $currentPaymentStatus === 'paid' ? 'refunded' : ($bookingRow['payment_status'] ?? 'pending');
+
+                $updateStmt = $pdo->prepare("
+                    UPDATE bookings
+                    SET booking_status = 'cancelled',
+                        payment_status = ?,
+                        updated_at = NOW()
+                    WHERE id = ? AND user_id = ?
+                    LIMIT 1
+                ");
+                $updateStmt->execute([
+                    $newPaymentStatus,
+                    $bookingId,
+                    $userId
+                ]);
+
+                $pdo->commit();
+
+                $customerName = trim((string)($bookingRow['customer_name'] ?? '')) !== ''
+                    ? (string)$bookingRow['customer_name']
+                    : (string)($user['full_name'] ?? 'Customer');
+
+                $customerEmail = trim((string)($bookingRow['customer_email'] ?? ''));
+                if ($customerEmail === '' && !empty($user['email'])) {
+                    $customerEmail = (string)$user['email'];
+                }
+
+                if ($customerEmail !== '') {
+                    $subject = 'Booking Cancelled - ' . (string)$bookingRow['booking_reference'];
+                    $html = '
+                        <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.7;color:#1e293b;">
+                            <p>Dear ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . ',</p>
+                            <p>Your booking <strong>' . htmlspecialchars((string)$bookingRow['booking_reference'], ENT_QUOTES, 'UTF-8') . '</strong> for <strong>' . htmlspecialchars((string)$bookingRow['package_name'], ENT_QUOTES, 'UTF-8') . '</strong> has been cancelled successfully.</p>
+                            <p>If any amount was paid, it will be refunded within <strong>5 to 6 working days</strong>.</p>
+                            <p>
+                                <strong>Travel Date:</strong> ' . htmlspecialchars((string)$bookingRow['travel_date'], ENT_QUOTES, 'UTF-8') . '<br>
+                                <strong>Amount:</strong> ' . htmlspecialchars(formatPrice($bookingRow['total_amount']), ENT_QUOTES, 'UTF-8') . '
+                            </p>
+                            <p>Regards,<br>Prime Holiday Team</p>
+                        </div>
+                    ';
+                    $mailError = null;
+                    sendBookingMail($customerEmail, $customerName, $subject, $html, $mailError);
+                }
+
+                try {
+                    $adminStmt = $pdo->query("
+                        SELECT full_name, email
+                        FROM users
+                        WHERE role = 'admin' AND is_active = 1 AND email IS NOT NULL AND email <> ''
+                        ORDER BY id ASC
+                    ");
+                    $admins = $adminStmt ? $adminStmt->fetchAll() : [];
+
+                    foreach ($admins as $adminRow) {
+                        $adminEmail = trim((string)($adminRow['email'] ?? ''));
+                        if ($adminEmail === '') {
+                            continue;
+                        }
+
+                        $adminName = trim((string)($adminRow['full_name'] ?? '')) ?: 'Admin';
+                        $subject = 'User Cancelled Booking - ' . (string)$bookingRow['booking_reference'];
+                        $html = '
+                            <div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.7;color:#1e293b;">
+                                <p>Hello ' . htmlspecialchars($adminName, ENT_QUOTES, 'UTF-8') . ',</p>
+                                <p>A user cancelled a booking.</p>
+                                <p>
+                                    <strong>Booking Ref:</strong> ' . htmlspecialchars((string)$bookingRow['booking_reference'], ENT_QUOTES, 'UTF-8') . '<br>
+                                    <strong>Customer:</strong> ' . htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8') . '<br>
+                                    <strong>Email:</strong> ' . htmlspecialchars($customerEmail, ENT_QUOTES, 'UTF-8') . '<br>
+                                    <strong>Package:</strong> ' . htmlspecialchars((string)$bookingRow['package_name'], ENT_QUOTES, 'UTF-8') . '<br>
+                                    <strong>Travel Date:</strong> ' . htmlspecialchars((string)$bookingRow['travel_date'], ENT_QUOTES, 'UTF-8') . '<br>
+                                    <strong>Amount:</strong> ' . htmlspecialchars(formatPrice($bookingRow['total_amount']), ENT_QUOTES, 'UTF-8') . '
+                                </p>
+                                <p>The booking status is now <strong>Cancelled</strong>.</p>
+                            </div>
+                        ';
+                        $mailError = null;
+                        sendBookingMail($adminEmail, $adminName, $subject, $html, $mailError);
+                    }
+                } catch (Throwable $e) {
+                    // keep silent, booking already cancelled successfully
+                }
+
+                $success = 'Booking cancelled successfully.';
+            }
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $error = 'Unable to cancel booking right now.';
         }
     }
 }
@@ -256,8 +595,13 @@ try {
     $error = 'Unable to load booking history.';
 }
 
-function profileTabUrl(string $tab): string {
-    return BASE_URL . '/profile.php?tab=' . urlencode($tab);
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    $activeTab === 'password' &&
+    isset($_SESSION['profile_password_reset_email']) &&
+    $_SESSION['profile_password_reset_email'] === ($user['email'] ?? '')
+) {
+    $passwordOtpStep = true;
 }
 
 require_once __DIR__ . '/includes/header.php';
@@ -289,13 +633,13 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
 
                 <div class="profile-sidebar-info profile-sidebar-info-classic">
-    <p><strong>Name:</strong> <?= e($user['full_name'] ?? '') ?></p>
-    <p><strong>Email:</strong> <?= e($user['email'] ?? '') ?></p>
-    <p><strong>Phone:</strong> <?= e($user['phone'] ?? '') ?></p>
-    <p><strong>Gender:</strong> <?= e(ucfirst($user['gender'] ?? '')) ?></p>
-    <p><strong>Role:</strong> <?= e(ucfirst($user['role'] ?? 'user')) ?></p>
-    <p><strong>Member Since:</strong> <?= e($user['created_at'] ?? '') ?></p>
-</div>
+                    <p><strong>Name:</strong> <?= e($user['full_name'] ?? '') ?></p>
+                    <p><strong>Email:</strong> <?= e($user['email'] ?? '') ?></p>
+                    <p><strong>Phone:</strong> <?= e($user['phone'] ?? '') ?></p>
+                    <p><strong>Gender:</strong> <?= e(ucfirst($user['gender'] ?? '')) ?></p>
+                    <p><strong>Role:</strong> <?= e(ucfirst($user['role'] ?? 'user')) ?></p>
+                    <p><strong>Member Since:</strong> <?= e($user['created_at'] ?? '') ?></p>
+                </div>
 
                 <div class="profile-sidebar-nav">
                     <?php if (isAdmin()): ?>
@@ -390,6 +734,7 @@ require_once __DIR__ . '/includes/header.php';
                             </div>
                         </form>
                     </div>
+
                 <?php elseif ($activeTab === 'password'): ?>
                     <div class="info-card profile-content-card">
                         <div class="profile-content-head">
@@ -399,32 +744,96 @@ require_once __DIR__ . '/includes/header.php';
                             </div>
                         </div>
 
-                        <form method="post" action="">
-                            <input type="hidden" name="change_password" value="1">
-                            <input type="hidden" name="active_tab" value="password">
+                        <?php if (!$passwordOtpStep): ?>
+                            <form method="post" action="">
+                                <input type="hidden" name="change_password" value="1">
+                                <input type="hidden" name="active_tab" value="password">
 
-                            <div class="contact-form">
-                                <div class="field-wrap">
-                                    <label class="field-label">Current Password</label>
-                                    <input type="password" name="current_password" placeholder="Current password" required>
+                                <div class="contact-form">
+                                    <div class="field-wrap">
+                                        <label class="field-label">Current Password</label>
+                                        <input type="password" name="current_password" placeholder="Current password" required>
+                                    </div>
+
+                                    <div class="field-wrap">
+                                        <label class="field-label">New Password</label>
+                                        <input type="password" name="new_password" placeholder="New password (min 8 characters)" required>
+                                    </div>
+
+                                    <div class="field-wrap">
+                                        <label class="field-label">Confirm New Password</label>
+                                        <input type="password" name="confirm_new_password" placeholder="Confirm new password" required>
+                                    </div>
+
+                                    <div class="form-actions profile-form-actions">
+                                        <button type="submit" class="btn btn-primary">Change Password</button>
+                                    </div>
                                 </div>
+                            </form>
 
-                                <div class="field-wrap">
-                                    <label class="field-label">New Password</label>
-                                    <input type="password" name="new_password" placeholder="New password (min 8 characters)" required>
-                                </div>
+                            <div style="margin-top:18px;padding-top:18px;border-top:1px solid #dbe4f0;">
+                                <h4 style="margin:0 0 8px;">Forgot current password?</h4>
+                                <p style="margin:0 0 14px;color:#64748b;">
+                                    Send an OTP to <strong><?= e($user['email'] ?? '') ?></strong> and reset your password.
+                                </p>
 
-                                <div class="field-wrap">
-                                    <label class="field-label">Confirm New Password</label>
-                                    <input type="password" name="confirm_new_password" placeholder="Confirm new password" required>
-                                </div>
+                                <form method="post" action="">
+                                    <input type="hidden" name="send_password_reset_otp" value="1">
+                                    <input type="hidden" name="active_tab" value="password">
+                                    <button type="submit" class="btn btn-soft">Send Reset OTP</button>
+                                </form>
+                            </div>
 
-                                <div class="form-actions profile-form-actions">
-                                    <button type="submit" class="btn btn-primary">Change Password</button>
+                        <?php else: ?>
+                            <div style="margin-top:4px;">
+                                <h4 style="margin:0 0 8px;">Forgot current password?</h4>
+                                <p style="margin:0 0 14px;color:#64748b;">
+                                    OTP has been sent to <strong><?= e($user['email'] ?? '') ?></strong>. Enter it below to reset your password.
+                                </p>
+
+                                <form method="post" action="">
+                                    <input type="hidden" name="reset_password_with_otp" value="1">
+                                    <input type="hidden" name="active_tab" value="password">
+
+                                    <div class="contact-form">
+                                        <div class="field-wrap">
+                                            <label class="field-label">OTP Code</label>
+                                            <input type="text" name="otp_code" placeholder="Enter 6-digit OTP" maxlength="6" required>
+                                        </div>
+
+                                        <div class="field-wrap">
+                                            <label class="field-label">New Password</label>
+                                            <input type="password" name="otp_new_password" placeholder="New password (min 8 characters)" required>
+                                        </div>
+
+                                        <div class="field-wrap">
+                                            <label class="field-label">Confirm New Password</label>
+                                            <input type="password" name="otp_confirm_new_password" placeholder="Confirm new password" required>
+                                        </div>
+
+                                        <div class="form-actions profile-form-actions">
+                                            <button type="submit" class="btn btn-primary">Verify OTP & Reset Password</button>
+                                        </div>
+                                    </div>
+                                </form>
+
+                                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+                                    <form method="post" action="" style="margin:0;">
+                                        <input type="hidden" name="send_password_reset_otp" value="1">
+                                        <input type="hidden" name="active_tab" value="password">
+                                        <button type="submit" class="btn btn-soft">Resend Reset OTP</button>
+                                    </form>
+
+                                    <form method="post" action="" style="margin:0;">
+                                        <input type="hidden" name="cancel_password_otp" value="1">
+                                        <input type="hidden" name="active_tab" value="password">
+                                        <button type="submit" class="btn btn-soft">Back to Change Password</button>
+                                    </form>
                                 </div>
                             </div>
-                        </form>
+                        <?php endif; ?>
                     </div>
+
                 <?php else: ?>
                     <div class="info-card profile-content-card">
                         <div class="profile-content-head">
@@ -440,6 +849,7 @@ require_once __DIR__ . '/includes/header.php';
                                     <?php
                                     $hasReview = !empty($booking['review_id']);
                                     $feedbackBoxId = 'feedback-box-' . (int)$booking['id'];
+                                    $bookingStatusLower = strtolower((string)($booking['booking_status'] ?? ''));
                                     ?>
                                     <div class="profile-booking-card">
                                         <div class="profile-booking-top">
@@ -463,6 +873,22 @@ require_once __DIR__ . '/includes/header.php';
                                         <div class="card-actions profile-booking-actions">
                                             <a class="btn btn-small btn-soft" href="<?= BASE_URL ?>/package-details.php?id=<?= (int)$booking['package_id'] ?>">View Package</a>
                                             <a class="btn btn-small btn-soft" href="<?= BASE_URL ?>/receipt.php?booking_id=<?= (int)$booking['id'] ?>">View Receipt</a>
+
+                                            <?php if (canCancelBooking($booking)): ?>
+                                                <form method="post" action="" style="margin:0;" onsubmit="return confirm('Are you sure you want to cancel this booking?');">
+                                                    <input type="hidden" name="cancel_booking_user" value="1">
+                                                    <input type="hidden" name="active_tab" value="bookings">
+                                                    <input type="hidden" name="booking_id" value="<?= (int)$booking['id'] ?>">
+                                                    <button type="submit" class="btn btn-small btn-soft" style="border-color:#fecaca;color:#b91c1c;background:#fff5f5;">
+                                                        Cancel Booking
+                                                    </button>
+                                                </form>
+                                            <?php elseif ($bookingStatusLower === 'cancelled'): ?>
+                                                <span class="btn btn-small btn-soft" style="pointer-events:none;background:#fee2e2;color:#991b1b;border-color:#fecaca;">
+                                                    Cancelled
+                                                </span>
+                                            <?php endif; ?>
+
                                             <button
                                                 type="button"
                                                 class="btn btn-small <?= $hasReview ? 'btn-primary' : 'btn-soft' ?> profile-feedback-toggle"

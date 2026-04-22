@@ -18,6 +18,12 @@ if ($slug === '') {
                 slug,
                 short_description,
                 full_description,
+                best_places,
+                top_activities,
+                best_time_to_visit,
+                food_to_try,
+                local_transport,
+                travel_tips,
                 state_name,
                 country_name,
                 hero_image,
@@ -65,6 +71,17 @@ if ($slug === '') {
     }
 }
 
+function splitLines(?string $text): array
+{
+    if ($text === null || trim($text) === '') {
+        return [];
+    }
+
+    $items = preg_split('/\r\n|\r|\n/', $text);
+    $items = array_map('trim', $items);
+    return array_values(array_filter($items, static fn($item) => $item !== ''));
+}
+
 require_once __DIR__ . '/includes/header.php';
 ?>
 
@@ -98,7 +115,7 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
 
                 <div style="padding:24px;">
-                    <div class="info-grid">
+                    <div class="info-grid" style="margin-bottom:24px;">
                         <div class="info-card" style="grid-column: span 2;">
                             <h3>About <?= e($destination['name']) ?></h3>
                             <p style="margin-bottom:12px;">
@@ -114,8 +131,89 @@ require_once __DIR__ . '/includes/header.php';
                             <p><strong>State:</strong> <?= e($destination['state_name'] ?: '-') ?></p>
                             <p><strong>Country:</strong> <?= e($destination['country_name'] ?: '-') ?></p>
                             <p><strong>Trending:</strong> <?= (int)$destination['is_trending'] === 1 ? 'Yes' : 'No' ?></p>
+                            <p><strong>Best Time:</strong> <?= e($destination['best_time_to_visit'] ?: '-') ?></p>
                         </div>
                     </div>
+
+                    <?php $bestPlaces = splitLines($destination['best_places'] ?? ''); ?>
+                    <?php $topActivities = splitLines($destination['top_activities'] ?? ''); ?>
+                    <?php $foodToTry = splitLines($destination['food_to_try'] ?? ''); ?>
+
+                    <?php
+                    $accordionItems = [
+                        [
+                            'title' => 'Best Places to Visit in ' . $destination['name'],
+                            'type' => 'list',
+                            'content' => $bestPlaces,
+                        ],
+                        [
+                            'title' => 'Top Things to Do',
+                            'type' => 'list',
+                            'content' => $topActivities,
+                        ],
+                        [
+                            'title' => 'Food to Try',
+                            'type' => 'list',
+                            'content' => $foodToTry,
+                        ],
+                        [
+                            'title' => 'Local Transport',
+                            'type' => 'text',
+                            'content' => trim((string)($destination['local_transport'] ?? '')),
+                        ],
+                        [
+                            'title' => 'Travel Tips',
+                            'type' => 'text',
+                            'content' => trim((string)($destination['travel_tips'] ?? '')),
+                        ],
+                    ];
+
+                    $accordionItems = array_values(array_filter($accordionItems, function ($item) {
+                        if ($item['type'] === 'list') {
+                            return !empty($item['content']);
+                        }
+                        return $item['content'] !== '';
+                    }));
+                    ?>
+
+                    <?php if (!empty($accordionItems)): ?>
+    <div style="margin-top:24px;">
+        <h3 style="margin:0 0 16px;">Destination Guide</h3>
+
+        <div class="destination-accordion">
+            <?php foreach ($accordionItems as $index => $item): ?>
+                <div class="destination-accordion-item">
+                    <button
+                        type="button"
+                        class="destination-accordion-toggle"
+                        data-accordion-target="destination-accordion-panel-<?= $index ?>"
+                        aria-expanded="<?= $index === 0 ? 'true' : 'false' ?>"
+                    >
+                        <span><?= e($item['title']) ?></span>
+                        <span class="destination-accordion-icon"><?= $index === 0 ? '−' : '+' ?></span>
+                    </button>
+
+                    <div
+                        id="destination-accordion-panel-<?= $index ?>"
+                        class="destination-accordion-panel<?= $index === 0 ? ' is-open' : '' ?>"
+                    >
+                        <div class="destination-accordion-panel-inner">
+                            <?php if ($item['type'] === 'list'): ?>
+                                <ul style="margin:0;padding-left:18px;">
+                                    <?php foreach ($item['content'] as $line): ?>
+                                        <li style="margin-bottom:8px;"><?= e($line) ?></li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            <?php else: ?>
+                                <p style="margin:0;white-space:pre-line;"><?= e($item['content']) ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+<?php endif; ?>
 
                     <?php
                     $gallery = array_values(array_filter([
@@ -168,7 +266,11 @@ require_once __DIR__ . '/includes/header.php';
                 <div class="card-grid">
                     <?php if (!empty($packages)): ?>
                         <?php foreach ($packages as $package): ?>
-                            <div class="card">
+                            <div
+                                class="card package-card-link"
+                                onclick="window.location.href='<?= BASE_URL ?>/package-details.php?id=<?= (int)$package['id'] ?>'"
+                                style="cursor:pointer;"
+                            >
                                 <div class="card-image">
                                     <img src="<?= e(getImageUrl($package['featured_image'])) ?>" alt="<?= e($package['package_name']) ?>">
                                 </div>
@@ -201,8 +303,13 @@ require_once __DIR__ . '/includes/header.php';
                                     </p>
 
                                     <div class="card-actions" style="margin-top:14px;">
-                                        <a class="btn btn-small btn-soft" href="<?= BASE_URL ?>/package-details.php?id=<?= (int)$package['id'] ?>">View Details</a>
-                                        <a class="btn btn-small btn-primary" href="<?= BASE_URL ?>/booking.php?package_id=<?= (int)$package['id'] ?>">Book Now</a>
+                                        <a
+                                            class="btn btn-small btn-primary"
+                                            href="<?= BASE_URL ?>/booking.php?package_id=<?= (int)$package['id'] ?>"
+                                            onclick="event.stopPropagation();"
+                                        >
+                                            Book Now
+                                        </a>
                                     </div>
                                 </div>
                             </div>
@@ -218,5 +325,85 @@ require_once __DIR__ . '/includes/header.php';
         <?php endif; ?>
     </div>
 </section>
+
+<style>
+.destination-accordion {
+    display: grid;
+    gap: 10px;
+}
+
+.destination-accordion-item {
+    border-bottom: 1px solid #dbe4f0;
+    background: transparent;
+}
+
+.destination-accordion-toggle {
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 16px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 16px;
+    font-weight: 800;
+    color: #162033;
+}
+
+.destination-accordion-toggle:hover {
+    color: #0f6cbd;
+}
+
+.destination-accordion-icon {
+    font-size: 22px;
+    line-height: 1;
+    color: #0f6cbd;
+    flex: 0 0 auto;
+}
+
+.destination-accordion-panel {
+    display: none;
+    padding: 0 0 16px;
+}
+
+.destination-accordion-panel.is-open {
+    display: block;
+}
+
+.destination-accordion-panel-inner {
+    padding: 0;
+    color: #5f6d83;
+}
+</style>
+
+<script>
+(function () {
+    const toggles = document.querySelectorAll('.destination-accordion-toggle');
+
+    toggles.forEach(function (toggle) {
+        toggle.addEventListener('click', function () {
+            const targetId = this.getAttribute('data-accordion-target');
+            const panel = document.getElementById(targetId);
+            if (!panel) return;
+
+            const isOpen = panel.classList.contains('is-open');
+            const icon = this.querySelector('.destination-accordion-icon');
+
+            if (isOpen) {
+                panel.classList.remove('is-open');
+                this.setAttribute('aria-expanded', 'false');
+                if (icon) icon.textContent = '+';
+            } else {
+                panel.classList.add('is-open');
+                this.setAttribute('aria-expanded', 'true');
+                if (icon) icon.textContent = '−';
+            }
+        });
+    });
+})();
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

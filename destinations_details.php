@@ -14,6 +14,12 @@ try {
                 slug,
                 short_description,
                 full_description,
+                best_places,
+                top_activities,
+                best_time_to_visit,
+                food_to_try,
+                local_transport,
+                travel_tips,
                 state_name,
                 country_name,
                 hero_image,
@@ -26,11 +32,15 @@ try {
                  OR country_name LIKE ?
                  OR short_description LIKE ?
                  OR full_description LIKE ?
+                 OR best_places LIKE ?
+                 OR top_activities LIKE ?
+                 OR food_to_try LIKE ?
+                 OR travel_tips LIKE ?
               )
             ORDER BY is_trending DESC, name ASC
         ");
         $like = '%' . $search . '%';
-        $stmt->execute([$like, $like, $like, $like, $like]);
+        $stmt->execute([$like, $like, $like, $like, $like, $like, $like, $like, $like]);
     } else {
         $stmt = $pdo->query("
             SELECT
@@ -39,6 +49,12 @@ try {
                 slug,
                 short_description,
                 full_description,
+                best_places,
+                top_activities,
+                best_time_to_visit,
+                food_to_try,
+                local_transport,
+                travel_tips,
                 state_name,
                 country_name,
                 hero_image,
@@ -94,7 +110,10 @@ require_once __DIR__ . '/includes/header.php';
         <div class="destinations-list-grid">
             <?php if (!empty($destinations)): ?>
                 <?php foreach ($destinations as $destination): ?>
-                    <div class="card destination-list-card">
+                    <div
+                        class="card destination-list-card destination-card-link"
+                        onclick="window.location.href='<?= BASE_URL ?>/destinations.php?slug=<?= urlencode($destination['slug']) ?>'"
+                    >
                         <div class="card-image">
                             <img
                                 src="<?= e(getImageUrl($destination['hero_image'])) ?>"
@@ -114,17 +133,17 @@ require_once __DIR__ . '/includes/header.php';
                                 <?= e($destination['short_description'] ?: 'Discover this beautiful destination with Prime Holiday.') ?>
                             </p>
 
-                            <div class="card-actions">
-                                <a
-                                    class="btn btn-small btn-soft"
-                                    href="<?= BASE_URL ?>/destinations.php?slug=<?= urlencode($destination['slug']) ?>"
-                                >
-                                    View Packages
-                                </a>
+                            <?php if (!empty($destination['best_time_to_visit'])): ?>
+                                <p style="margin:0;color:#64748b;">
+                                    <strong>Best Time:</strong> <?= e($destination['best_time_to_visit']) ?>
+                                </p>
+                            <?php endif; ?>
 
+                            <div class="card-actions">
                                 <a
                                     class="btn btn-small btn-primary"
                                     href="<?= BASE_URL ?>/index.php?search=<?= urlencode($destination['name']) ?>#packages"
+                                    onclick="event.stopPropagation();"
                                 >
                                     Search Packages
                                 </a>

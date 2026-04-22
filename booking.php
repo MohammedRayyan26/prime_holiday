@@ -11,6 +11,24 @@ $error = '';
 $user = null;
 $package = null;
 
+$bangalorePickupPoints = [
+    'Anand Rao Circle',
+    'Majestic',
+    'Madiwala',
+    'Central Silk Board',
+    'Electronic City',
+    'Hebbal',
+    'Marathahalli',
+    'Tin Factory',
+    'Kalasipalayam',
+    'Bellandur',
+    'Yeshwanthpur',
+    'HSR Layout',
+    'K R Puram',
+    'Bommasandra',
+    'Yelahanka',
+];
+
 $userStmt = $pdo->prepare("
     SELECT id, full_name, email, phone
     FROM users
@@ -44,7 +62,7 @@ require_once __DIR__ . '/includes/header.php';
         <div class="section-head admin-packages-head" style="margin-bottom:12px;">
             <span class="badge">Booking & Payment</span>
             <h2 style="margin:8px 0 6px;">Complete Your Booking</h2>
-            <p style="margin:0;">Enter your trip details, pay securely, and submit feedback after success.</p>
+            <p style="margin:0;">Enter your trip details, upload Aadhar, choose pickup point, and pay securely.</p>
         </div>
 
         <?php if ($error !== ''): ?>
@@ -64,7 +82,7 @@ require_once __DIR__ . '/includes/header.php';
                 <div class="info-card" style="grid-column: span 2; padding:20px 22px;">
                     <h3 style="margin-bottom:12px;">Booking Details</h3>
 
-                    <form id="bookingForm" novalidate>
+                    <form id="bookingForm" novalidate enctype="multipart/form-data">
                         <input type="hidden" name="package_id" value="<?= (int)$package['id'] ?>">
 
                         <div class="form-grid-2" style="gap:14px;">
@@ -72,50 +90,62 @@ require_once __DIR__ . '/includes/header.php';
                                 <label class="field-label">Travel Date</label>
                                 <input type="date" name="travel_date" required>
                                 <div class="field-hint">Select your trip start date.</div>
-                                <div class="field-error" data-error-for="travel_date" style="color:#dc2626; font-size:12px; margin-top:5px; display:none;"></div>
+                                <div class="field-error" data-error-for="travel_date" style="color:#dc2626;font-size:12px;margin-top:5px;display:none;"></div>
                             </div>
 
                             <div class="field-wrap">
                                 <label class="field-label">Number of Passengers</label>
                                 <input type="number" name="number_of_passengers" min="1" value="1" required>
                                 <div class="field-hint">Enter how many people are travelling.</div>
-                                <div class="field-error" data-error-for="number_of_passengers" style="color:#dc2626; font-size:12px; margin-top:5px; display:none;"></div>
+                                <div class="field-error" data-error-for="number_of_passengers" style="color:#dc2626;font-size:12px;margin-top:5px;display:none;"></div>
                             </div>
 
                             <div class="field-wrap">
                                 <label class="field-label">Full Name</label>
                                 <input type="text" name="customer_name" value="<?= e($user['full_name'] ?? '') ?>" required>
                                 <div class="field-hint">Main traveler name.</div>
-                                <div class="field-error" data-error-for="customer_name" style="color:#dc2626; font-size:12px; margin-top:5px; display:none;"></div>
+                                <div class="field-error" data-error-for="customer_name" style="color:#dc2626;font-size:12px;margin-top:5px;display:none;"></div>
                             </div>
 
                             <div class="field-wrap">
                                 <label class="field-label">Email Address</label>
                                 <input type="email" name="customer_email" value="<?= e($user['email'] ?? '') ?>" required>
                                 <div class="field-hint">Receipt and updates will come here.</div>
-                                <div class="field-error" data-error-for="customer_email" style="color:#dc2626; font-size:12px; margin-top:5px; display:none;"></div>
+                                <div class="field-error" data-error-for="customer_email" style="color:#dc2626;font-size:12px;margin-top:5px;display:none;"></div>
                             </div>
 
                             <div class="field-wrap">
                                 <label class="field-label">Mobile Number</label>
                                 <input type="text" name="customer_phone" value="<?= e($user['phone'] ?? '') ?>" required maxlength="10">
                                 <div class="field-hint">Use your active number.</div>
-                                <div class="field-error" data-error-for="customer_phone" style="color:#dc2626; font-size:12px; margin-top:5px; display:none;"></div>
+                                <div class="field-error" data-error-for="customer_phone" style="color:#dc2626;font-size:12px;margin-top:5px;display:none;"></div>
                             </div>
 
                             <div class="field-wrap">
                                 <label class="field-label">Aadhar Card Number</label>
                                 <input type="text" name="aadhar_number" maxlength="12" required>
                                 <div class="field-hint">Enter 12 digit Aadhar number.</div>
-                                <div class="field-error" data-error-for="aadhar_number" style="color:#dc2626; font-size:12px; margin-top:5px; display:none;"></div>
+                                <div class="field-error" data-error-for="aadhar_number" style="color:#dc2626;font-size:12px;margin-top:5px;display:none;"></div>
                             </div>
 
                             <div class="field-wrap">
-    <label class="field-label">Pickup Point</label>
-    <input type="text" name="pickup_point" required>
-    <div class="field-hint">Enter your pickup location.</div>
-    <div class="field-error" data-error-for="pickup_point" style="color:#dc2626; font-size:12px; margin-top:5px; display:none;"></div>
-</div>
+                                <label class="field-label">Aadhar Card Image</label>
+                                <input type="file" name="aadhar_image" accept=".jpg,.jpeg,.png,.webp" required>
+                                <div class="field-hint">Upload JPG, JPEG, PNG, or WEBP. Max 5 MB.</div>
+                                <div class="field-error" data-error-for="aadhar_image" style="color:#dc2626;font-size:12px;margin-top:5px;display:none;"></div>
+                            </div>
+
+                            <div class="field-wrap">
+                                <label class="field-label">Pickup Point</label>
+                                <select name="pickup_point" required>
+                                    <option value="">Select Bangalore pickup point</option>
+                                    <?php foreach ($bangalorePickupPoints as $point): ?>
+                                        <option value="<?= e($point) ?>"><?= e($point) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div class="field-hint">Choose your Bangalore pickup point.</div>
+                                <div class="field-error" data-error-for="pickup_point" style="color:#dc2626;font-size:12px;margin-top:5px;display:none;"></div>
+                            </div>
                         </div>
 
                         <div class="field-wrap" style="margin-top:10px;">
@@ -226,6 +256,8 @@ function validateBookingForm() {
     const customerPhone = bookingForm.customer_phone.value.trim();
     const aadharNumber = bookingForm.aadhar_number.value.trim();
     const pickupPoint = bookingForm.pickup_point.value.trim();
+    const aadharImageField = bookingForm.querySelector('[name="aadhar_image"]');
+    const aadharImage = aadharImageField && aadharImageField.files ? aadharImageField.files[0] : null;
 
     clearFieldError('travel_date');
     clearFieldError('number_of_passengers');
@@ -233,6 +265,7 @@ function validateBookingForm() {
     clearFieldError('customer_email');
     clearFieldError('customer_phone');
     clearFieldError('aadhar_number');
+    clearFieldError('aadhar_image');
     clearFieldError('pickup_point');
 
     if (travelDate === '') {
@@ -274,24 +307,39 @@ function validateBookingForm() {
         isValid = false;
     }
 
+    if (!aadharImage) {
+        setFieldError('aadhar_image', 'Please upload Aadhar image.');
+        isValid = false;
+    } else {
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+        if (allowedTypes.indexOf(aadharImage.type) === -1) {
+            setFieldError('aadhar_image', 'Only JPG, JPEG, PNG, or WEBP files are allowed.');
+            isValid = false;
+        } else if (aadharImage.size > 5 * 1024 * 1024) {
+            setFieldError('aadhar_image', 'Aadhar image size must be 5 MB or less.');
+            isValid = false;
+        }
+    }
+
     if (pickupPoint === '') {
-    setFieldError('pickup_point', 'Please enter pickup point.');
-    isValid = false;
-}
+        setFieldError('pickup_point', 'Please select pickup point.');
+        isValid = false;
+    }
 
     return isValid;
 }
 
 if (bookingForm) {
     const requiredFields = [
-    'travel_date',
-    'number_of_passengers',
-    'customer_name',
-    'customer_email',
-    'customer_phone',
-    'aadhar_number',
-    'pickup_point'
-];
+        'travel_date',
+        'number_of_passengers',
+        'customer_name',
+        'customer_email',
+        'customer_phone',
+        'aadhar_number',
+        'aadhar_image',
+        'pickup_point'
+    ];
 
     requiredFields.forEach(function(fieldName) {
         const field = bookingForm.querySelector('[name="' + fieldName + '"]');

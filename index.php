@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_type'] ?? '') === 'co
         $contactOld['email'] === '' ||
         $contactOld['message'] === ''
     ) {
-        $contactError = 'Please fill Full Name, Email Address, and Message.';
+        $contactError = 'Please fill all required fields: Full Name, Email Address, and Message.';
     } elseif (!filter_var($contactOld['email'], FILTER_VALIDATE_EMAIL)) {
         $contactError = 'Please enter a valid email address.';
     } elseif ($contactOld['phone'] !== '' && !preg_match('/^[0-9]{10}$/', $contactOld['phone'])) {
@@ -130,7 +130,8 @@ try {
             INNER JOIN destinations d ON d.id = p.destination_id
             LEFT JOIN vw_package_rating_summary v ON v.package_id = p.id
             WHERE p.is_active = 1
-            ORDER BY p.is_featured DESC, p.id DESC
+              AND p.is_featured = 1
+            ORDER BY p.id DESC
             LIMIT 12
         ");
     }
@@ -166,11 +167,11 @@ require_once __DIR__ . '/includes/header.php';
                 with a cleaner and more professional holiday booking experience.
             </p>
 
-            <form method="get" action="<?= BASE_URL ?>/index.php#packages" class="contact-form" style="margin-top:18px;">
+            <form id="homeSearchForm" method="get" action="<?= BASE_URL ?>/index.php#packages" class="contact-form" style="margin-top:18px;">
                 <div class="form-grid-2">
                     <div class="field-wrap">
                         <label class="field-label">Search Packages or Destinations</label>
-                        <input type="text" name="search" value="" placeholder="Search package">
+                        <input type="text" id="homeSearchInput" name="search" value="<?= e($search) ?>" placeholder="Search package">
                         <div class="field-hint">Try package name or destination name.</div>
                     </div>
                 </div>
@@ -198,7 +199,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <div class="hero-image-card">
-            <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80" alt="Prime Holiday">
+            <img src="uploads/heroimage.jpeg" alt="Prime Holiday">
         </div>
     </div>
 </section>
@@ -280,53 +281,70 @@ require_once __DIR__ . '/includes/header.php';
 
 <section class="section" id="packages">
     <div class="container">
-        <div class="section-head">
-            <span class="badge">Travel Packages</span>
-            <h2>Choose the right package for your next trip</h2>
-            <p>
-                Browse our featured and active packages. Search results are shown here when users search by package or destination.
-            </p>
+        <div class="section-head destinations-head-row">
+            <div>
+                <span class="badge">Travel Packages</span>
+                <h2>Choose the right package for your next trip</h2>
+                <p>
+                    Browse our featured packages here. To view all active packages, open the full packages page.
+                </p>
+            </div>
+
+            <div class="destinations-head-action">
+                <a href="<?= BASE_URL ?>/packages.php" class="btn btn-soft">
+                    More Packages
+                </a>
+            </div>
         </div>
 
         <div class="card-grid">
             <?php if (!empty($packages)): ?>
-                <?php foreach ($packages as $package): ?>
-                    <div class="card">
-                        <div class="card-image">
-                            <img src="<?= e(getImageUrl($package['featured_image'])) ?>" alt="<?= e($package['package_name']) ?>">
-                        </div>
+    <?php foreach ($packages as $package): ?>
+        <div
+            class="card package-card-link"
+            onclick="window.location.href='<?= BASE_URL ?>/package-details.php?id=<?= (int)$package['id'] ?>'"
+            style="cursor:pointer;"
+        >
+            <div class="card-image">
+                <img src="<?= e(getImageUrl($package['featured_image'])) ?>" alt="<?= e($package['package_name']) ?>">
+            </div>
 
-                        <div class="card-body">
-                            <div class="card-meta">
-                                <span><?= e($package['destination_name']) ?></span>
-                                <span><?= (int)$package['duration_days'] ?>D / <?= (int)$package['duration_nights'] ?>N</span>
-                            </div>
+            <div class="card-body">
+                <div class="card-meta">
+                    <span><?= e($package['destination_name']) ?></span>
+                    <span><?= (int)$package['duration_days'] ?>D / <?= (int)$package['duration_nights'] ?>N</span>
+                </div>
 
-                            <h3><?= e($package['package_name']) ?></h3>
-                            <p><?= e($package['short_description'] ?? 'Enjoy a professionally curated travel experience.') ?></p>
+                <h3><?= e($package['package_name']) ?></h3>
+                <p><?= e($package['short_description'] ?? 'Enjoy a professionally curated travel experience.') ?></p>
 
-                            <div class="rating-row">
-                                <span class="stars"><?= e(renderStars((float)$package['average_rating'])) ?></span>
-                                <span><?= number_format((float)$package['average_rating'], 1) ?> (<?= (int)$package['total_reviews'] ?> reviews)</span>
-                            </div>
+                <div class="rating-row">
+                    <span class="stars"><?= e(renderStars((float)$package['average_rating'])) ?></span>
+                    <span><?= number_format((float)$package['average_rating'], 1) ?> (<?= (int)$package['total_reviews'] ?> reviews)</span>
+                </div>
 
-                            <div class="price-row">
-                                <?php if (!empty($package['offer_price'])): ?>
-                                    <strong><?= e(formatPrice($package['offer_price'])) ?></strong>
-                                    <del><?= e(formatPrice($package['price'])) ?></del>
-                                <?php else: ?>
-                                    <strong><?= e(formatPrice($package['price'])) ?></strong>
-                                <?php endif; ?>
-                            </div>
+                <div class="price-row">
+                    <?php if (!empty($package['offer_price'])): ?>
+                        <strong><?= e(formatPrice($package['offer_price'])) ?></strong>
+                        <del><?= e(formatPrice($package['price'])) ?></del>
+                    <?php else: ?>
+                        <strong><?= e(formatPrice($package['price'])) ?></strong>
+                    <?php endif; ?>
+                </div>
 
-                            <div class="card-actions">
-                                <a class="btn btn-small btn-soft" href="<?= BASE_URL ?>/package-details.php?id=<?= (int)$package['id'] ?>">View Details</a>
-                                <a class="btn btn-small btn-primary" href="<?= BASE_URL ?>/booking.php?package_id=<?= (int)$package['id'] ?>">Book Now</a>
-                            </div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
+                <div class="card-actions">
+                    <a
+                        class="btn btn-small btn-primary"
+                        href="<?= BASE_URL ?>/booking.php?package_id=<?= (int)$package['id'] ?>"
+                        onclick="event.stopPropagation();"
+                    >
+                        Book Now
+                    </a>
+                </div>
+            </div>
+        </div>
+    <?php endforeach; ?>
+<?php else: ?>
                 <div class="info-card">
                     <h3>No packages found</h3>
                     <p>Please try a different search term.</p>
@@ -409,41 +427,138 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
                 <?php endif; ?>
 
-                <form class="contact-form" action="<?= BASE_URL ?>/index.php#contact" method="post">
-                    <input type="hidden" name="form_type" value="contact_form">
+                <form class="contact-form" id="contactForm" action="<?= BASE_URL ?>/index.php#contact" method="post" novalidate>
+    <input type="hidden" name="form_type" value="contact_form">
 
-                    <div class="field-wrap">
-                        <label class="field-label">Full Name</label>
-                        <input type="text" name="full_name" placeholder="Enter your name" value="<?= e($contactOld['full_name']) ?>" required>
-                    </div>
+    <div class="field-wrap">
+        <label class="field-label">Full Name <span style="color:red;">*</span></label>
+        <input
+            type="text"
+            name="full_name"
+            placeholder="Enter your name"
+            value="<?= e($contactOld['full_name']) ?>"
+            required
+        >
+    </div>
 
-                    <div class="field-wrap">
-                        <label class="field-label">Email Address</label>
-                        <input type="email" name="email" placeholder="Enter your email" value="<?= e($contactOld['email']) ?>" required>
-                    </div>
+    <div class="field-wrap">
+        <label class="field-label">Email Address <span style="color:red;">*</span></label>
+        <input
+            type="email"
+            name="email"
+            placeholder="Enter your email"
+            value="<?= e($contactOld['email']) ?>"
+            required
+        >
+    </div>
 
-                    <div class="field-wrap">
-                        <label class="field-label">Phone Number</label>
-                        <input type="text" name="phone" placeholder="Enter your phone number" maxlength="10" value="<?= e($contactOld['phone']) ?>">
-                    </div>
+    <div class="field-wrap">
+        <label class="field-label">Phone Number</label>
+        <input
+            type="text"
+            name="phone"
+            placeholder="Enter your phone number"
+            maxlength="10"
+            pattern="[0-9]{10}"
+            inputmode="numeric"
+            value="<?= e($contactOld['phone']) ?>"
+        >
+        <div class="field-hint">Optional. If entered, it must be 10 digits.</div>
+    </div>
 
-                    <div class="field-wrap">
-                        <label class="field-label">Subject</label>
-                        <input type="text" name="subject" placeholder="Enter subject" value="<?= e($contactOld['subject']) ?>">
-                    </div>
+    <div class="field-wrap">
+        <label class="field-label">Subject</label>
+        <input
+            type="text"
+            name="subject"
+            placeholder="Enter subject"
+            value="<?= e($contactOld['subject']) ?>"
+        >
+        <div class="field-hint">Optional.</div>
+    </div>
 
-                    <div class="field-wrap">
-                        <label class="field-label">Message</label>
-                        <textarea name="message" placeholder="Write your message" required><?= e($contactOld['message']) ?></textarea>
-                    </div>
+    <div class="field-wrap">
+        <label class="field-label">Message <span style="color:red;">*</span></label>
+        <textarea
+            name="message"
+            placeholder="Write your message"
+            required
+        ><?= e($contactOld['message']) ?></textarea>
+    </div>
 
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Send Message</button>
-                    </div>
-                </form>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Send Message</button>
+    </div>
+</form>
             </div>
         </div>
     </div>
 </section>
+<script>
+(function () {
+    const baseUrl = '<?= BASE_URL ?>/index.php';
+    const url = new URL(window.location.href);
+    const hasSearch = url.searchParams.has('search') && url.searchParams.get('search').trim() !== '';
+    const isReload =
+        performance &&
+        performance.getEntriesByType &&
+        performance.getEntriesByType('navigation')[0] &&
+        performance.getEntriesByType('navigation')[0].type === 'reload';
 
+    if (hasSearch && isReload) {
+        window.location.replace(baseUrl);
+        return;
+    }
+
+    const searchForm = document.getElementById('homeSearchForm');
+    const searchInput = document.getElementById('homeSearchInput');
+
+    if (searchForm && searchInput) {
+        searchForm.addEventListener('submit', function () {
+            const value = searchInput.value.trim();
+            if (value === '') {
+                window.location.href = baseUrl;
+                return false;
+            }
+        });
+    }
+})();
+
+(function () {
+    const contactForm = document.getElementById('contactForm');
+
+    if (contactForm) {
+        contactForm.addEventListener('submit', function (e) {
+            const fullName = contactForm.querySelector('[name="full_name"]');
+            const email = contactForm.querySelector('[name="email"]');
+            const phone = contactForm.querySelector('[name="phone"]');
+            const message = contactForm.querySelector('[name="message"]');
+
+            const fullNameValue = fullName.value.trim();
+            const emailValue = email.value.trim();
+            const phoneValue = phone.value.trim();
+            const messageValue = message.value.trim();
+
+            if (!fullNameValue || !emailValue || !messageValue) {
+                e.preventDefault();
+                alert('Please fill all required fields: Full Name, Email Address, and Message.');
+                return;
+            }
+
+            const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailPattern.test(emailValue)) {
+                e.preventDefault();
+                alert('Please enter a valid email address.');
+                return;
+            }
+
+            if (phoneValue !== '' && !/^[0-9]{10}$/.test(phoneValue)) {
+                e.preventDefault();
+                alert('Phone number must be exactly 10 digits.');
+                return;
+            }
+        });
+    }
+})();
+</script>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
