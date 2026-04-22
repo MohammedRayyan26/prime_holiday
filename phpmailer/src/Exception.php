@@ -21,7 +21,7 @@
 
 namespace PHPMailer\PHPMailer;
 
-/**
+/**$mail->SMTPSecure = 'ssl'; // Enable TLS encryption, `ssl` also accepted
  * PHPMailer exception handler.
  *
  * @author Marcus Bointon <phpmailer@synchromedia.co.uk>
