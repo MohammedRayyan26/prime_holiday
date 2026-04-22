@@ -14,6 +14,12 @@ $form = [
     'slug' => '',
     'short_description' => '',
     'full_description' => '',
+    'best_places' => '',
+    'top_activities' => '',
+    'best_time_to_visit' => '',
+    'food_to_try' => '',
+    'local_transport' => '',
+    'travel_tips' => '',
     'state_name' => '',
     'country_name' => 'India',
     'is_trending' => 0,
@@ -94,6 +100,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $form['slug'] = trim($_POST['slug'] ?? '');
         $form['short_description'] = trim($_POST['short_description'] ?? '');
         $form['full_description'] = trim($_POST['full_description'] ?? '');
+        $form['best_places'] = trim($_POST['best_places'] ?? '');
+        $form['top_activities'] = trim($_POST['top_activities'] ?? '');
+        $form['best_time_to_visit'] = trim($_POST['best_time_to_visit'] ?? '');
+        $form['food_to_try'] = trim($_POST['food_to_try'] ?? '');
+        $form['local_transport'] = trim($_POST['local_transport'] ?? '');
+        $form['travel_tips'] = trim($_POST['travel_tips'] ?? '');
         $form['state_name'] = trim($_POST['state_name'] ?? '');
         $form['country_name'] = trim($_POST['country_name'] ?? 'India');
         $form['is_trending'] = isset($_POST['is_trending']) ? 1 : 0;
@@ -132,6 +144,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     slug = ?,
                                     short_description = ?,
                                     full_description = ?,
+                                    best_places = ?,
+                                    top_activities = ?,
+                                    best_time_to_visit = ?,
+                                    food_to_try = ?,
+                                    local_transport = ?,
+                                    travel_tips = ?,
                                     state_name = ?,
                                     country_name = ?,
                                     hero_image = ?,
@@ -145,6 +163,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $form['slug'],
                                 $form['short_description'] !== '' ? $form['short_description'] : null,
                                 $form['full_description'] !== '' ? $form['full_description'] : null,
+                                $form['best_places'] !== '' ? $form['best_places'] : null,
+                                $form['top_activities'] !== '' ? $form['top_activities'] : null,
+                                $form['best_time_to_visit'] !== '' ? $form['best_time_to_visit'] : null,
+                                $form['food_to_try'] !== '' ? $form['food_to_try'] : null,
+                                $form['local_transport'] !== '' ? $form['local_transport'] : null,
+                                $form['travel_tips'] !== '' ? $form['travel_tips'] : null,
                                 $form['state_name'] !== '' ? $form['state_name'] : null,
                                 $form['country_name'] !== '' ? $form['country_name'] : 'India',
                                 $form['hero_image'] !== '' ? $form['hero_image'] : null,
@@ -160,6 +184,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'slug' => '',
                                 'short_description' => '',
                                 'full_description' => '',
+                                'best_places' => '',
+                                'top_activities' => '',
+                                'best_time_to_visit' => '',
+                                'food_to_try' => '',
+                                'local_transport' => '',
+                                'travel_tips' => '',
                                 'state_name' => '',
                                 'country_name' => 'India',
                                 'is_trending' => 0,
@@ -176,15 +206,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         } else {
                             $stmt = $pdo->prepare("
                                 INSERT INTO destinations (
-                                    name, slug, short_description, full_description, state_name, country_name,
-                                    hero_image, is_trending, is_active, created_at, updated_at
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                                    name, slug, short_description, full_description,
+                                    best_places, top_activities, best_time_to_visit, food_to_try, local_transport, travel_tips,
+                                    state_name, country_name, hero_image, is_trending, is_active, created_at, updated_at
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
                             ");
                             $stmt->execute([
                                 $form['name'],
                                 $form['slug'],
                                 $form['short_description'] !== '' ? $form['short_description'] : null,
                                 $form['full_description'] !== '' ? $form['full_description'] : null,
+                                $form['best_places'] !== '' ? $form['best_places'] : null,
+                                $form['top_activities'] !== '' ? $form['top_activities'] : null,
+                                $form['best_time_to_visit'] !== '' ? $form['best_time_to_visit'] : null,
+                                $form['food_to_try'] !== '' ? $form['food_to_try'] : null,
+                                $form['local_transport'] !== '' ? $form['local_transport'] : null,
+                                $form['travel_tips'] !== '' ? $form['travel_tips'] : null,
                                 $form['state_name'] !== '' ? $form['state_name'] : null,
                                 $form['country_name'] !== '' ? $form['country_name'] : 'India',
                                 $form['hero_image'] !== '' ? $form['hero_image'] : null,
@@ -198,6 +235,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'slug' => '',
                                 'short_description' => '',
                                 'full_description' => '',
+                                'best_places' => '',
+                                'top_activities' => '',
+                                'best_time_to_visit' => '',
+                                'food_to_try' => '',
+                                'local_transport' => '',
+                                'travel_tips' => '',
                                 'state_name' => '',
                                 'country_name' => 'India',
                                 'is_trending' => 0,
@@ -272,7 +315,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($editId > 0) {
     try {
         $editStmt = $pdo->prepare("
-            SELECT id, name, slug, short_description, full_description, state_name, country_name, hero_image, is_trending, is_active
+            SELECT
+                id, name, slug, short_description, full_description,
+                best_places, top_activities, best_time_to_visit, food_to_try, local_transport, travel_tips,
+                state_name, country_name, hero_image, is_trending, is_active
             FROM destinations
             WHERE id = ?
             LIMIT 1
@@ -285,6 +331,12 @@ if ($editId > 0) {
             $form['slug'] = $editRow['slug'] ?? '';
             $form['short_description'] = $editRow['short_description'] ?? '';
             $form['full_description'] = $editRow['full_description'] ?? '';
+            $form['best_places'] = $editRow['best_places'] ?? '';
+            $form['top_activities'] = $editRow['top_activities'] ?? '';
+            $form['best_time_to_visit'] = $editRow['best_time_to_visit'] ?? '';
+            $form['food_to_try'] = $editRow['food_to_try'] ?? '';
+            $form['local_transport'] = $editRow['local_transport'] ?? '';
+            $form['travel_tips'] = $editRow['travel_tips'] ?? '';
             $form['state_name'] = $editRow['state_name'] ?? '';
             $form['country_name'] = $editRow['country_name'] ?? 'India';
             $form['hero_image'] = $editRow['hero_image'] ?? '';
@@ -301,7 +353,9 @@ if ($editId > 0) {
 $destinations = [];
 try {
     $stmt = $pdo->query("
-        SELECT id, name, slug, state_name, country_name, hero_image, is_trending, is_active, created_at
+        SELECT
+            id, name, slug, state_name, country_name,
+            best_time_to_visit, hero_image, is_trending, is_active, created_at
         FROM destinations
         ORDER BY id DESC
     ");
@@ -337,10 +391,10 @@ require_once __DIR__ . '/../includes/header.php';
         <?php endif; ?>
 
         <div style="display:flex; justify-content:flex-end; margin-bottom:14px;">
-    <div class="info-card admin-destination-notes" style="width:100%; max-width:1240px;">
+            <div class="info-card admin-destination-notes" style="width:100%; max-width:1240px;">
                 <h3>Destination Notes</h3>
                 <div class="admin-destination-note-list">
-                    <div>Use a unique slug for each destination.* Packages can later be mapped under these destinations.* Trending destinations appear first on the homepage.* Active destinations are visible publicly.</div>
+                    <div>Use a unique slug for each destination. Packages can later be mapped under these destinations. Trending destinations appear first on the homepage. Active destinations are visible publicly.</div>
                 </div>
             </div>
         </div>
@@ -384,6 +438,36 @@ require_once __DIR__ . '/../includes/header.php';
                     <div class="field-wrap" style="grid-column: span 2;">
                         <label class="field-label">Full Description</label>
                         <textarea name="full_description" rows="5"><?= e($form['full_description']) ?></textarea>
+                    </div>
+
+                    <div class="field-wrap" style="grid-column: span 2;">
+                        <label class="field-label">Best Places to Visit</label>
+                        <textarea name="best_places" rows="5" placeholder="One place per line"><?= e($form['best_places']) ?></textarea>
+                    </div>
+
+                    <div class="field-wrap" style="grid-column: span 2;">
+                        <label class="field-label">Top Activities</label>
+                        <textarea name="top_activities" rows="5" placeholder="One activity per line"><?= e($form['top_activities']) ?></textarea>
+                    </div>
+
+                    <div class="field-wrap">
+                        <label class="field-label">Best Time to Visit</label>
+                        <input type="text" name="best_time_to_visit" value="<?= e($form['best_time_to_visit']) ?>" placeholder="Example: November to February">
+                    </div>
+
+                    <div class="field-wrap">
+                        <label class="field-label">Local Transport</label>
+                        <textarea name="local_transport" rows="3"><?= e($form['local_transport']) ?></textarea>
+                    </div>
+
+                    <div class="field-wrap" style="grid-column: span 2;">
+                        <label class="field-label">Food to Try</label>
+                        <textarea name="food_to_try" rows="4" placeholder="One food item per line"><?= e($form['food_to_try']) ?></textarea>
+                    </div>
+
+                    <div class="field-wrap" style="grid-column: span 2;">
+                        <label class="field-label">Travel Tips</label>
+                        <textarea name="travel_tips" rows="4"><?= e($form['travel_tips']) ?></textarea>
                     </div>
 
                     <div class="field-wrap">
@@ -438,6 +522,7 @@ require_once __DIR__ . '/../includes/header.php';
                                 <th>Name</th>
                                 <th>Slug</th>
                                 <th>Location</th>
+                                <th>Best Time</th>
                                 <th>Trending</th>
                                 <th>Active</th>
                                 <th>Actions</th>
@@ -456,35 +541,36 @@ require_once __DIR__ . '/../includes/header.php';
                                     <td><?= e($row['name']) ?></td>
                                     <td><?= e($row['slug']) ?></td>
                                     <td><?= e(($row['state_name'] ?: '-') . ', ' . ($row['country_name'] ?: '-')) ?></td>
+                                    <td><?= e($row['best_time_to_visit'] ?: '-') ?></td>
                                     <td><?= (int)$row['is_trending'] === 1 ? 'Yes' : 'No' ?></td>
                                     <td><?= (int)$row['is_active'] === 1 ? 'Yes' : 'No' ?></td>
-                                    <td>
-                                        <div class="form-actions" style="gap:8px;">
-                                            <a class="btn btn-soft btn-small" href="<?= BASE_URL ?>/admin/destinations.php?edit_id=<?= (int)$row['id'] ?>">Edit</a>
+                                    <td class="admin-destination-actions-cell">
+    <div class="admin-destination-actions-inline">
+        <a class="btn btn-soft btn-small admin-destination-action-btn action-edit" href="<?= BASE_URL ?>/admin/destinations.php?edit_id=<?= (int)$row['id'] ?>">Edit</a>
 
-                                            <form method="post" action="" style="display:inline;">
-                                                <input type="hidden" name="action" value="toggle_trending">
-                                                <input type="hidden" name="destination_id" value="<?= (int)$row['id'] ?>">
-                                                <button type="submit" class="btn btn-soft btn-small">
-                                                    <?= (int)$row['is_trending'] === 1 ? 'Untrend' : 'Trend' ?>
-                                                </button>
-                                            </form>
+        <form method="post" action="" class="admin-destination-action-form">
+            <input type="hidden" name="action" value="toggle_trending">
+            <input type="hidden" name="destination_id" value="<?= (int)$row['id'] ?>">
+            <button type="submit" class="btn btn-soft btn-small admin-destination-action-btn action-trend">
+                <?= (int)$row['is_trending'] === 1 ? 'Untrend' : 'Trend' ?>
+            </button>
+        </form>
 
-                                            <form method="post" action="" style="display:inline;">
-                                                <input type="hidden" name="action" value="toggle_active">
-                                                <input type="hidden" name="destination_id" value="<?= (int)$row['id'] ?>">
-                                                <button type="submit" class="btn btn-soft btn-small">
-                                                    <?= (int)$row['is_active'] === 1 ? 'Deactivate' : 'Activate' ?>
-                                                </button>
-                                            </form>
+        <form method="post" action="" class="admin-destination-action-form">
+            <input type="hidden" name="action" value="toggle_active">
+            <input type="hidden" name="destination_id" value="<?= (int)$row['id'] ?>">
+            <button type="submit" class="btn btn-soft btn-small admin-destination-action-btn action-active">
+                <?= (int)$row['is_active'] === 1 ? 'Deactivate' : 'Activate' ?>
+            </button>
+        </form>
 
-                                            <form method="post" action="" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this destination?');">
-                                                <input type="hidden" name="action" value="delete_destination">
-                                                <input type="hidden" name="destination_id" value="<?= (int)$row['id'] ?>">
-                                                <button type="submit" class="btn btn-danger btn-small">Delete</button>
-                                            </form>
-                                        </div>
-                                    </td>
+        <form method="post" action="" class="admin-destination-action-form" onsubmit="return confirm('Are you sure you want to delete this destination?');">
+            <input type="hidden" name="action" value="delete_destination">
+            <input type="hidden" name="destination_id" value="<?= (int)$row['id'] ?>">
+            <button type="submit" class="btn btn-danger btn-small admin-destination-action-btn action-delete">Delete</button>
+        </form>
+    </div>
+</td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
